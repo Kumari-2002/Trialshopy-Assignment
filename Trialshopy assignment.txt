@@ -1,0 +1,163 @@
+// Import required modules and packages
+import express, { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
+import session from 'express-session';
+import bodyParser from 'body-parser';
+
+// Create an Express application
+const app = express();
+const PORT = 3000;
+
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost:27017/ecomerse_db', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+// Define Merchant schema
+const merchantSchema = new mongoose.Schema({
+  storeID: String,
+  merchantName: String,
+  email: String,
+  commission: Number,
+});
+
+const Merchant = mongoose.model('Merchant', merchantSchema);
+
+// Configure middleware
+app.use(bodyParser.json());
+app.use(session({ secret: 'your-secret-key', resave: true, saveUninitialized: true }));
+
+// Authentication middleware
+const authenticate = (req: Request, res: Response, next: NextFunction) => {
+  const authToken = req.session.authToken;
+
+  if (!authToken) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Implement your token verification logic here
+  // ...
+
+  next();
+};
+
+// Routes for Authentication and Authorization
+app.post('/auth/login', (req, res) => {
+  // Implement login logic here
+  // ...
+
+  req.session.authToken = 'oauthAccessToken'; 
+  res.json({ message: 'Login successful' });
+});
+
+app.post('/auth/logout', authenticate, (req, res) => {
+  // Implement logout logic here
+  // ...
+
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+    res.json({ message: 'Logout successful' });
+  });
+});
+
+app.get('/auth/session', authenticate, (req, res) => {
+  // Implement session check and permission logic here
+  // ...
+
+  res.json({ message: 'Session valid', permissions: ['read', 'write'] });
+});
+
+// Routes for Merchant API
+app.get('/api/merchants', authenticate, async (req, res) => {
+  try {
+    const { page, pageSize, searchQuery, dateFrom, dateTo } = req.query;
+    // Implement logic to retrieve paginated list of merchants based on query parameters
+    const merchants = await Merchant.find()
+      .skip((page - 1) * pageSize)
+      .limit(pageSize);
+
+    res.json({ merchants });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/api/merchants', authenticate, async (req, res) => {
+  try {
+    const newMerchant = await Merchant.create(req.body);
+    res.json({ merchant: newMerchant });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.put('/api/merchants/:merchantId', authenticate, async (req, res) => {
+  try {
+    const updatedMerchant = await Merchant.findByIdAndUpdate(
+      req.params.merchantId,
+      req.body,
+      { new: true }
+    );
+
+    if (!updatedMerchant) {
+      return res.status(404).json({ error: 'Merchant not found' });
+    }
+
+    res.json({ merchant: updatedMerchant });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.delete('/api/merchants/:merchantId', authenticate, async (req, res) => {
+  try {
+    const deletedMerchant = await Merchant.findByIdAndDelete(
+      req.params.merchantId
+    );
+
+    if (!deletedMerchant) {
+      return res.status(404).json({ error: 'Merchant not found' });
+    }
+
+    res.json({ message: 'Merchant deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/merchants/:merchantId', authenticate, async (req, res) => {
+  try {
+    const merchant = await Merchant.findById(req.params.merchantId);
+
+    if (!merchant) {
+      return res.status(404).json({ error: 'Merchant not found' });
+    }
+
+    res.json({ merchant });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/merchants/filter', authenticate, async (req, res) => {
+  try {
+    const filteredMerchants = await Merchant.find(req.query.filterOptions);
+    res.json({ merchants: filteredMerchants });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
